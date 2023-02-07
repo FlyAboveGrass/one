@@ -1,20 +1,29 @@
-import { ChatGPTAPI } from 'chatgpt'
+import { ChatGPTAPI, SendMessageOptions } from 'chatgpt'
 import { WechatyBuilder } from 'wechaty'
+import qrcodeTerminal from 'qrcode-terminal'
 
 async function createChatGPTInstance() {
 	const api = new ChatGPTAPI({
-		apiKey: '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', // todo: 可输入
+		apiKey: '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', // todo: 可输入
 		debug: true
 	})
 
-	const res = await api.sendMessage('Hello World!')
-	const conversationParams = {
-		conversationId: res.conversationId,
-		parentMessageId:res.parentMessageId
+	let conversationParams: SendMessageOptions = {
+		conversationId: undefined,
+		parentMessageId: undefined
 	}
 
 	return {
-		sendMessage: async (text) => await api.sendMessage(text, conversationParams)
+		sendMessage: async (content) => {
+			const res = await api.sendMessage(content, conversationParams)
+			const { conversationId, id, text } = res
+			conversationParams = {
+				conversationId,
+				parentMessageId: id
+			}
+
+			return text
+		}
 	}
 }
 
@@ -33,7 +42,7 @@ async function startWechatBot() {
 		
 	
 		wechaty
-			.on('scan', (qrcode, status) => console.log(`Scan QR Code to login: ${status}\nhttps://wechaty.js.org/qrcode/${encodeURIComponent(qrcode)}`))
+			.on('scan', onScan)
 			.on('login',            user => console.log(`User ${user} logged in`))
 			.on('message', onMessage.bind(this))
 	
@@ -45,6 +54,15 @@ async function startWechatBot() {
 		console.log("🚀 ~ file: index.ts:42 ~ startWechatBot ~ e", e)
 	}
 	
+	function onScan(qrcode, status) {
+		console.log("🚀 ~ file: index.ts:49 ~ onScan ~ status, qrcode", status, qrcode)
+
+		if (status === 2) {
+			qrcodeTerminal.generate(qrcode, {small: true}, function (code) {
+				console.log(code)
+			});
+		}
+	}
 
 	async function onMessage(msg) {
 		const msgStr = msg.toString()
@@ -73,16 +91,16 @@ async function startWechatBot() {
 		const contact = msg.talker();
 		const receiver = msg.to();
 		const alias = (await contact.alias()) || (await contact.name());
-		console.log("🚀 ~ file: index.ts:82 ~ onMessage ~ alias", alias, receiver, /^问[:：]/.test(msgStr))
+		console.log("🚀 ~ file: index.ts:82 ~ onMessage ~ alias", alias, receiver)
 
-		if (msg.self() && !/^问[:：]/.test(msgStr)) {
+		if (msg.self()) {
 			console.info('Message discarded because it is from myself')
 			return
 		}
 	
-		const res = await sendMessage(msgStr)
-		console.log("🚀 ~ file: index.ts:49 ~ onMessage ~ res", res)
-		await msg.say(res.text)
+		const resText = await sendMessage(msgStr)
+		console.log("🚀 ~ file: index.ts:49 ~ onMessage ~ res", resText)
+		await msg.say(resText)
 	}
 }
 
